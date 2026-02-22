@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Loader2, AlertCircle } from "lucide-react";
+import { Mic, MicOff, Loader2, AlertCircle, Clock } from "lucide-react";
 
 const TARGET_SAMPLE_RATE = 24000;
 const CHUNK_MS = 100;
@@ -23,6 +23,12 @@ function formatTime(ms: number): string {
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
+function getTimerColor(ms: number): string {
+  if (ms <= 60 * 1000) return "text-red-600 dark:text-red-400";
+  if (ms <= 5 * 60 * 1000) return "text-amber-600 dark:text-amber-400";
+  return "text-emerald-600 dark:text-emerald-400";
+}
+
 export function VoiceInterview({
   sessionId,
   wsToken,
@@ -33,7 +39,9 @@ export function VoiceInterview({
 }: VoiceInterviewProps) {
   const [status, setStatus] = useState<"idle" | "connecting" | "connected" | "error">("idle");
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
+  const [aiStatus, setAiStatus] = useState<"listening" | "thinking" | "speaking">("listening");
   const [micMuted, setMicMuted] = useState(false);
+  const thinkingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionEndedRef = useRef(false);
   const micMutedRef = useRef(false);
   micMutedRef.current = micMuted;
@@ -131,11 +139,28 @@ export function VoiceInterview({
           return;
         }
         if (msg.type === "response.output_audio.delta" && msg.delta) {
+          setAiStatus("speaking");
           playAudioChunk(msg.delta);
+        }
+        if (msg.type === "response.created" || msg.type === "response.output_item.added") {
+          setAiStatus("thinking");
+          if (thinkingTimeoutRef.current) clearTimeout(thinkingTimeoutRef.current);
+          thinkingTimeoutRef.current = setTimeout(() => {
+            thinkingTimeoutRef.current = null;
+            setAiStatus((s) => (s === "thinking" ? "listening" : s));
+          }, 30_000);
+        }
+        if (msg.type === "response.done") {
+          if (thinkingTimeoutRef.current) {
+            clearTimeout(thinkingTimeoutRef.current);
+            thinkingTimeoutRef.current = null;
+          }
+          setAiStatus("listening");
         }
         if (msg.type === "conversation.item.created" && msg.item?.content) {
           for (const part of msg.item.content) {
             if (part.type === "output_audio" && part.audio) {
+              setAiStatus("speaking");
               playAudioChunk(part.audio);
             }
           }
@@ -143,6 +168,7 @@ export function VoiceInterview({
         if (msg.type === "conversation.item.added" && msg.item?.content) {
           for (const part of msg.item.content) {
             if (part.type === "output_audio" && part.audio) {
+              setAiStatus("speaking");
               playAudioChunk(part.audio);
             }
           }
@@ -173,6 +199,7 @@ export function VoiceInterview({
     };
 
     return () => {
+      if (thinkingTimeoutRef.current) clearTimeout(thinkingTimeoutRef.current);
       ws.close();
       wsRef.current = null;
     };
@@ -292,13 +319,31 @@ export function VoiceInterview({
       {status === "connected" && (
         <div className="flex flex-wrap items-center justify-center gap-4">
           {remainingMs !== null && (
-            <div className="flex items-center gap-2 rounded border border-border-subtle px-3 py-1.5">
-              <span className="font-mono text-lg font-medium tabular-nums text-ink">
+            <div
+              className={`flex items-center gap-2 rounded border border-border-subtle px-3 py-1.5 ${getTimerColor(remainingMs)}`}
+              role="timer"
+              aria-live="polite"
+              aria-label={`${formatTime(remainingMs)} remaining`}
+            >
+              <Clock className="h-4 w-4 shrink-0" aria-hidden />
+              <span className="font-mono text-lg font-medium tabular-nums">
                 {formatTime(remainingMs)}
               </span>
-              <span className="text-caption text-ink-muted">remaining</span>
+              <span className="text-caption opacity-80">remaining</span>
             </div>
           )}
+          <span
+            className="text-body-sm text-ink-muted"
+            role="status"
+            aria-live="polite"
+          >
+            AI: {aiStatus === "listening" && "Listening…"}
+            {aiStatus === "thinking" && "Thinking…"}
+            {aiStatus === "speaking" && "Speaking…"}
+          </span>
+          <span className="text-body-sm text-ink-muted">
+            {micMuted ? "Mic muted" : "Mic on"}
+          </span>
           <Button
             variant={micMuted ? "outline" : "default"}
             size="icon"
@@ -311,9 +356,6 @@ export function VoiceInterview({
               <Mic className="h-4 w-4" />
             )}
           </Button>
-          <span className="text-body-sm text-ink-muted">
-            {micMuted ? "Muted" : "Listening"}
-          </span>
           <Button
             variant="outline"
             size="sm"

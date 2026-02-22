@@ -56,10 +56,10 @@ export function InterviewSplitPane({
   return (
     <div
       ref={containerRef}
-      className="flex h-full min-h-[400px] overflow-hidden"
+      className="flex flex-1 min-h-[400px] overflow-hidden"
     >
       <div
-        className="overflow-auto"
+        className="h-full overflow-auto"
         style={{ width: `${leftPercent}%`, minWidth: `${minLeftPercent}%` }}
       >
         {left}

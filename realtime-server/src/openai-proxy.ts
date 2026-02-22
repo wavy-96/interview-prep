@@ -94,7 +94,7 @@ function extractTranscriptFromMessage(
 export function createOpenAIProxy(
   session: Session,
   callbacks: OpenAIProxyCallbacks
-): { send: (data: string) => void; injectTimeWarning: (text: string) => void; disconnect: () => void } | null {
+): { send: (data: string) => void; injectTimeWarning: (text: string) => void; injectObserverInsights: (text: string) => void; disconnect: () => void } | null {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey?.trim()) {
     callbacks.onError("provider_unavailable", "OpenAI API key not configured");
@@ -245,6 +245,28 @@ export function createOpenAIProxy(
     }
   }
 
+  function injectObserverInsights(text: string): void {
+    if (isClosed || !ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      const event = {
+        type: "response.create",
+        response: {
+          input: [
+            {
+              type: "message",
+              role: "system",
+              content: [{ type: "input_text" as const, text: `Background context about the candidate's code (use naturally in conversation, don't announce "my observer says" — just weave it in naturally): ${text}` }],
+            },
+          ],
+          conversation: "auto",
+        },
+      };
+      ws.send(JSON.stringify(event));
+    } catch (err) {
+      console.error("[OpenAI] injectObserverInsights error:", (err as Error)?.message);
+    }
+  }
+
   return {
     send(data: string) {
       if (isClosed || !ws || ws.readyState !== WebSocket.OPEN) return;
@@ -256,6 +278,7 @@ export function createOpenAIProxy(
       }
     },
     injectTimeWarning,
+    injectObserverInsights,
     disconnect() {
       retryAttempt = MAX_RETRIES;
       cleanup();

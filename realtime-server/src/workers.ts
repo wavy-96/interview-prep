@@ -1,4 +1,5 @@
 import { redis } from "./redis.js";
+import { observeCodeAndInject } from "./observer-agent.js";
 
 const STREAM = "events";
 const DLQ_STREAM = "events.dlq";
@@ -37,13 +38,21 @@ function parsePayload(fields: string[]): Record<string, unknown> {
   return out;
 }
 
-/** Stub processor - succeeds for now. Real agents (CodeObserver, Evaluator) will be added in later epics. */
+/** Process events. Observer runs for code.edited in observer-workers; evaluator in later epic. */
 async function processEvent(
-  _type: string,
-  _sessionId: string,
-  _payload: unknown
+  type: string,
+  sessionId: string,
+  payload: unknown,
+  group: string
 ): Promise<{ success: boolean; error?: string }> {
-  // No-op: just acknowledge. Epic 5+ will add real processing.
+  if (type === "code.edited" && group === "observer-workers") {
+    const p = payload as { code?: string; language?: string } | undefined;
+    const code = typeof p?.code === "string" ? p.code : "";
+    const language = typeof p?.language === "string" ? p.language : "python";
+    observeCodeAndInject(sessionId, code, language).catch((err) => {
+      console.warn("[Observer] observeCodeAndInject error:", (err as Error)?.message);
+    });
+  }
   return { success: true };
 }
 
@@ -77,7 +86,7 @@ async function handleMessage(
     return;
   }
 
-  const result = await processEvent(type, sessionId, payload);
+  const result = await processEvent(type, sessionId, payload, group);
   if (result.success) {
     await redis.xack(stream, group, id);
   } else {

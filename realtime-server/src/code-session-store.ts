@@ -27,6 +27,10 @@ export function updateCode(sessionId: string, code: string, language: string): v
 
 export function removeSession(sessionId: string): void {
   store.delete(sessionId);
+  if (store.size === 0 && persistTimer) {
+    clearInterval(persistTimer);
+    persistTimer = null;
+  }
 }
 
 async function persistAll(): Promise<void> {

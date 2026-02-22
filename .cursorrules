@@ -1,0 +1,5 @@
+# AI Interview Prep — Project Rules
+
+- Use `new Date().getFullYear()` for dynamic year display (project targets 2026).
+- When adding copyright, dates, or "current year" references, prefer dynamic values.
+- Follow user-stories.md success criteria; update technical-architecture.md and user-stories.md after completing stories.

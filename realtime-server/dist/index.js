@@ -5,6 +5,7 @@ import { eventBus } from "./events.js";
 import { createVoiceProvider } from "./voice-provider-factory.js";
 import { redis } from "./redis.js";
 import { registerSessionSocket, registerTimeWarningCallback, startOrResumeTimer, unregisterSessionSocket, } from "./timer.js";
+import { registerObserverInject, unregisterObserverInject, } from "./observer-registry.js";
 import { startWorkers } from "./workers.js";
 import { removeSession } from "./code-session-store.js";
 const PORT = parseInt(process.env.PORT ?? "8080", 10);
@@ -76,6 +77,9 @@ wss.on("connection", async (ws, req) => {
             }));
         }
         registerSessionSocket(session.sessionId, ws);
+        if (voiceProvider) {
+            registerObserverInject(session.sessionId, (text) => voiceProvider.injectObserverInsights(text));
+        }
         registerTimeWarningCallback(session.sessionId, (remainingMs) => {
             if (!voiceProvider)
                 return;
@@ -103,6 +107,7 @@ wss.on("connection", async (ws, req) => {
         });
         ws.on("close", () => {
             unregisterSessionSocket(session.sessionId, ws);
+            unregisterObserverInject(session.sessionId);
             removeSession(session.sessionId);
             voiceProvider?.disconnect();
             connectionCount--;

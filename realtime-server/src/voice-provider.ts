@@ -13,5 +13,6 @@ export interface VoiceProviderCallbacks {
 export interface VoiceProvider {
   send(data: string): void;
   injectTimeWarning(text: string): void;
+  injectObserverInsights(text: string): void;
   disconnect(): void;
 }

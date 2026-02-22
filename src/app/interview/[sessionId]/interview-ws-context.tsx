@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
 import { VoiceInterview } from "@/components/voice/voice-interview";
 import { EndInterviewButton } from "./end-interview-button";
+import { DesktopGate } from "@/components/interview/desktop-gate";
 
 const MAX_CODE_SIZE = 50 * 1024;
 
@@ -87,6 +88,7 @@ export function InterviewWsProvider({ sessionId, children }: InterviewWsProvider
 
   return (
     <InterviewWsContext.Provider value={value}>
+      <DesktopGate>
       <div className="flex min-h-screen flex-col bg-paper">
         <header className="shrink-0 border-b border-border-subtle bg-surface px-4 py-3">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4">
@@ -112,6 +114,7 @@ export function InterviewWsProvider({ sessionId, children }: InterviewWsProvider
         </header>
         {children}
       </div>
+      </DesktopGate>
     </InterviewWsContext.Provider>
   );
 }

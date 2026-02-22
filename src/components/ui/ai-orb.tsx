@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import { SparklesCore } from "@/components/ui/sparkles";
 
 type AiOrbProps = {
@@ -19,14 +19,14 @@ export function AiOrb({ className }: AiOrbProps) {
       />
       <motion.div
         className="absolute inset-8 rounded-full border border-brand-forest/40"
-        animate={{ rotate: 360 }}
-        transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+        animate={{ rotate: [-10, 10, -10] }}
+        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
       />
       <SparklesCore
         className="absolute inset-0"
         background="transparent"
         particleColor="#d97757"
-        particleDensity={45}
+        particleDensity={30}
         minSize={0.8}
         maxSize={1.8}
       />

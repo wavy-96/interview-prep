@@ -268,9 +268,31 @@ export function createGeminiProvider(
     }
   }
 
+  function injectObserverInsights(text: string): void {
+    if (isClosed || !ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(
+        JSON.stringify({
+          clientContent: {
+            turns: [
+              {
+                role: "model",
+                parts: [{ text: `Background context about the candidate's code (use naturally in conversation, don't announce "my observer says"): ${text}` }],
+              },
+            ],
+            turnComplete: true,
+          },
+        })
+      );
+    } catch (err) {
+      console.error("[Gemini] injectObserverInsights error:", sanitizeError(err));
+    }
+  }
+
   return {
     send,
     injectTimeWarning,
+    injectObserverInsights,
     disconnect() {
       retryAttempt = MAX_RETRIES;
       cleanup();

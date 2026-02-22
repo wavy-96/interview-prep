@@ -1,4 +1,5 @@
 import { redis } from "./redis.js";
+import { observeCodeAndInject } from "./observer-agent.js";
 const STREAM = "events";
 const DLQ_STREAM = "events.dlq";
 const MAX_RETRIES = 5;
@@ -32,9 +33,16 @@ function parsePayload(fields) {
     }
     return out;
 }
-/** Stub processor - succeeds for now. Real agents (CodeObserver, Evaluator) will be added in later epics. */
-async function processEvent(_type, _sessionId, _payload) {
-    // No-op: just acknowledge. Epic 5+ will add real processing.
+/** Process events. Observer runs for code.edited in observer-workers; evaluator in later epic. */
+async function processEvent(type, sessionId, payload, group) {
+    if (type === "code.edited" && group === "observer-workers") {
+        const p = payload;
+        const code = typeof p?.code === "string" ? p.code : "";
+        const language = typeof p?.language === "string" ? p.language : "python";
+        observeCodeAndInject(sessionId, code, language).catch((err) => {
+            console.warn("[Observer] observeCodeAndInject error:", err?.message);
+        });
+    }
     return { success: true };
 }
 async function handleMessage(group, consumer, stream, entry) {
@@ -58,7 +66,7 @@ async function handleMessage(group, consumer, stream, entry) {
         console.warn(`[DLQ] Event moved to ${DLQ_STREAM}: type=${type} sessionId=${sessionId} msgId=${id} retries=${retryCount}`);
         return;
     }
-    const result = await processEvent(type, sessionId, payload);
+    const result = await processEvent(type, sessionId, payload, group);
     if (result.success) {
         await redis.xack(stream, group, id);
     }

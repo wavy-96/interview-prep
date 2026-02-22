@@ -18,6 +18,10 @@ export function updateCode(sessionId, code, language) {
 }
 export function removeSession(sessionId) {
     store.delete(sessionId);
+    if (store.size === 0 && persistTimer) {
+        clearInterval(persistTimer);
+        persistTimer = null;
+    }
 }
 async function persistAll() {
     const supabase = getSupabase();

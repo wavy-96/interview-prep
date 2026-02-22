@@ -225,6 +225,29 @@ export function createOpenAIProxy(session, callbacks) {
             console.error("[OpenAI] injectTimeWarning error:", err?.message);
         }
     }
+    function injectObserverInsights(text) {
+        if (isClosed || !ws || ws.readyState !== WebSocket.OPEN)
+            return;
+        try {
+            const event = {
+                type: "response.create",
+                response: {
+                    input: [
+                        {
+                            type: "message",
+                            role: "system",
+                            content: [{ type: "input_text", text: `Background context about the candidate's code (use naturally in conversation, don't announce "my observer says" — just weave it in naturally): ${text}` }],
+                        },
+                    ],
+                    conversation: "auto",
+                },
+            };
+            ws.send(JSON.stringify(event));
+        }
+        catch (err) {
+            console.error("[OpenAI] injectObserverInsights error:", err?.message);
+        }
+    }
     return {
         send(data) {
             if (isClosed || !ws || ws.readyState !== WebSocket.OPEN)
@@ -238,6 +261,7 @@ export function createOpenAIProxy(session, callbacks) {
             }
         },
         injectTimeWarning,
+        injectObserverInsights,
         disconnect() {
             retryAttempt = MAX_RETRIES;
             cleanup();

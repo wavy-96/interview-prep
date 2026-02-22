@@ -2,6 +2,8 @@
 
 Practice technical interviews with an AI voice interviewer. Real-time code observation, execution, and post-interview evaluation.
 
+> **Note:** This project targets 2026. Use current year (`new Date().getFullYear()`) for dynamic dates.
+
 ## Getting Started
 
 ```bash
@@ -29,6 +31,12 @@ Enable Email provider in Supabase Dashboard → Authentication → Providers. Ad
 **Database (Story 1.3):** Project `interview-prep-mvp` is linked. Migrations applied.
 
 **Seed 50 Problems (Story 1.4b):** Run `npm run db:seed` (gated to `NODE_ENV=development` or `FORCE_SEED=1`). Requires `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`.
+
+**Epic 6 (Code Execution):**
+- Install Modal: `pip install modal`
+- Deploy: `modal deploy modal/execute.py`
+- Set `MODAL_EXECUTE_URL` in `.env.local` to the deployed endpoint (e.g. `https://your-workspace--interview-prep-execute-execute.modal.run`)
+- Optional: `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` for proxy auth
 
 Add to `.env.local`:
 - `NEXT_PUBLIC_SUPABASE_URL=https://zlasadqmgwfcxwulyvif.supabase.co`

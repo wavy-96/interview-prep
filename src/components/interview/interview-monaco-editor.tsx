@@ -31,7 +31,6 @@ export function InterviewMonacoEditor({
 }: InterviewMonacoEditorProps) {
   const editorRef = useRef<{ layout: () => void } | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const isProgrammaticChangeRef = useRef(false);
 
   const handleMount = useCallback(
     (editor: { layout: () => void; updateOptions: (opts: Record<string, unknown>) => void }) => {
@@ -53,7 +52,6 @@ export function InterviewMonacoEditor({
 
   const handleChange = useCallback(
     (newValue: string | undefined) => {
-      if (isProgrammaticChangeRef.current) return;
       onChange?.(newValue ?? "");
     },
     [onChange]

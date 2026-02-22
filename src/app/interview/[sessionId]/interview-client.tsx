@@ -7,9 +7,12 @@ import { Code, Mic } from "lucide-react";
 import { useInterviewWs } from "./interview-ws-context";
 import { InterviewMonacoEditor } from "@/components/interview/interview-monaco-editor";
 import { InterviewSplitPane } from "@/components/interview/interview-split-pane";
+import { OutputPanel, type ExecutionResult, type ExecutionError } from "@/components/interview/output-panel";
+import { toast } from "sonner";
 
 const CODE_EDIT_DEBOUNCE_MS = 300;
 const MAX_CODE_SIZE = 50 * 1024;
+const EXECUTE_TIMEOUT_MS = 15_000;
 
 interface InterviewClientProps {
   sessionId: string;
@@ -32,6 +35,9 @@ export function InterviewClient({
   const starterCode =
     problem?.starter_code?.[language] ?? problem?.starter_code?.python ?? "";
   const [code, setCode] = useState(starterCode);
+  const [outputState, setOutputState] = useState<
+    { status: "idle" } | { status: "running" } | { status: "done"; result: ExecutionResult | ExecutionError }
+  >({ status: "idle" });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSentRef = useRef(starterCode);
   const isProgrammaticRef = useRef(false);
@@ -68,6 +74,61 @@ export function InterviewClient({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
+  }, []);
+
+  const handleRunCode = useCallback(async () => {
+    setOutputState({ status: "running" });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), EXECUTE_TIMEOUT_MS);
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, language }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      const data = await res.json();
+      if (!res.ok) {
+        setOutputState({
+          status: "done",
+          result: { error: data.error ?? data.details ?? `Request failed (${res.status})` },
+        });
+        if (res.status === 429) toast.error("Rate limited. Wait a minute before running again.");
+        return;
+      }
+      if (data.error) {
+        setOutputState({ status: "done", result: { error: data.error } });
+        return;
+      }
+      setOutputState({
+        status: "done",
+        result: {
+          stdout: data.stdout ?? "",
+          stderr: data.stderr ?? "",
+          exitCode: data.exitCode ?? 0,
+          duration_ms: data.duration_ms ?? 0,
+          ...(Array.isArray(data.testResults) && {
+            testResults: data.testResults,
+            passed: data.passed ?? 0,
+            total: data.total ?? 0,
+          }),
+        },
+      });
+    } catch (err) {
+      clearTimeout(timeoutId);
+      const msg = err instanceof Error ? err.message : "Execution failed";
+      const isTimeout = msg.includes("abort") || msg.includes("timeout");
+      setOutputState({
+        status: "done",
+        result: { error: isTimeout ? "Request timed out (15s)" : msg },
+      });
+      if (isTimeout) toast.error("Execution timed out");
+    }
+  }, [sessionId, code, language]);
+
+  const handleClearOutput = useCallback(() => {
+    setOutputState({ status: "idle" });
   }, []);
 
   return (
@@ -112,16 +173,24 @@ export function InterviewClient({
                 <Code className="h-4 w-4" />
                 Code ({language})
               </h2>
-              <Button variant="outline" size="sm" disabled>
-                Run Code
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={outputState.status === "running"}
+                onClick={handleRunCode}
+              >
+                {outputState.status === "running" ? "Running…" : "Run Code"}
               </Button>
             </div>
-            <div className="flex-1 overflow-hidden">
-              <InterviewMonacoEditor
-                value={code}
-                language={language}
-                onChange={handleEditorChange}
-              />
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <div className="min-h-0 flex-1">
+                <InterviewMonacoEditor
+                  value={code}
+                  language={language}
+                  onChange={handleEditorChange}
+                />
+              </div>
+              <OutputPanel state={outputState} onClear={handleClearOutput} />
             </div>
           </section>
         }

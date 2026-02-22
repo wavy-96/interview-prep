@@ -10,6 +10,10 @@ import {
   startOrResumeTimer,
   unregisterSessionSocket,
 } from "./timer.js";
+import {
+  registerObserverInject,
+  unregisterObserverInject,
+} from "./observer-registry.js";
 import { startWorkers } from "./workers.js";
 import { removeSession } from "./code-session-store.js";
 
@@ -98,6 +102,11 @@ wss.on("connection", async (ws, req) => {
     }
 
     registerSessionSocket(session.sessionId, ws);
+    if (voiceProvider) {
+      registerObserverInject(session.sessionId, (text) =>
+        voiceProvider!.injectObserverInsights(text)
+      );
+    }
     registerTimeWarningCallback(session.sessionId, (remainingMs) => {
       if (!voiceProvider) return;
       const text =
@@ -129,6 +138,7 @@ wss.on("connection", async (ws, req) => {
 
     ws.on("close", () => {
       unregisterSessionSocket(session.sessionId, ws);
+      unregisterObserverInject(session.sessionId);
       removeSession(session.sessionId);
       voiceProvider?.disconnect();
       connectionCount--;
