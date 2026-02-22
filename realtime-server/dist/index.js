@@ -6,6 +6,7 @@ import { createVoiceProvider } from "./voice-provider-factory.js";
 import { redis } from "./redis.js";
 import { registerSessionSocket, registerTimeWarningCallback, startOrResumeTimer, unregisterSessionSocket, } from "./timer.js";
 import { startWorkers } from "./workers.js";
+import { removeSession } from "./code-session-store.js";
 const PORT = parseInt(process.env.PORT ?? "8080", 10);
 const startTime = Date.now();
 let connectionCount = 0;
@@ -92,6 +93,8 @@ wss.on("connection", async (ws, req) => {
                     ended: state.remainingMs <= 0,
                 }));
             }
+        }).catch((err) => {
+            console.error("[Timer] startOrResumeTimer error:", err?.message);
         });
         ws.on("message", (data) => {
             eventBus.handleMessage(ws, session, data, {
@@ -100,6 +103,7 @@ wss.on("connection", async (ws, req) => {
         });
         ws.on("close", () => {
             unregisterSessionSocket(session.sessionId, ws);
+            removeSession(session.sessionId);
             voiceProvider?.disconnect();
             connectionCount--;
         });

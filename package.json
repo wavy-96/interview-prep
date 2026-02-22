@@ -10,6 +10,7 @@
     "db:seed": "tsx scripts/seed-problems.ts"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.97.0",
     "@tabler/icons-react": "^3.37.1",

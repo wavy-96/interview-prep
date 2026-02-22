@@ -2,6 +2,7 @@ import type { WebSocket } from "ws";
 import type { Session } from "./auth.js";
 import { redis } from "./redis.js";
 import { endSessionEarly } from "./timer.js";
+import { updateCode } from "./code-session-store.js";
 
 const MAX_PAYLOAD = 64 * 1024;
 const AUDIO_EVENTS = new Set([
@@ -56,10 +57,10 @@ export const eventBus = {
     }
 
     if (msg.type === "code_edit") {
-      await this.publishCodeEdit(session, {
-        code: typeof msg.code === "string" ? msg.code : "",
-        language: typeof msg.language === "string" ? msg.language : "python",
-      });
+      const code = typeof msg.code === "string" ? msg.code : "";
+      const language = typeof msg.language === "string" ? msg.language : "python";
+      updateCode(session.sessionId, code, language);
+      await this.publishCodeEdit(session, { code, language });
       ws.send(JSON.stringify({ type: "ack", event: msg.type }));
       return;
     }

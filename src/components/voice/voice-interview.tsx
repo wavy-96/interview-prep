@@ -11,6 +11,7 @@ interface VoiceInterviewProps {
   sessionId: string;
   wsToken: string | null;
   wsUrl: string;
+  wsRef?: React.MutableRefObject<WebSocket | null>;
   onError?: (message: string) => void;
   onSessionEnded?: () => void;
 }
@@ -26,6 +27,7 @@ export function VoiceInterview({
   sessionId,
   wsToken,
   wsUrl,
+  wsRef: externalWsRef,
   onError,
   onSessionEnded,
 }: VoiceInterviewProps) {
@@ -36,7 +38,8 @@ export function VoiceInterview({
   const micMutedRef = useRef(false);
   micMutedRef.current = micMuted;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  const internalWsRef = useRef<WebSocket | null>(null);
+  const wsRef = externalWsRef ?? internalWsRef;
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);

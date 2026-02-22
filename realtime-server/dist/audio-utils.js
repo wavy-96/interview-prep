@@ -4,7 +4,11 @@
  */
 /** Resample 24kHz 16-bit PCM to 16kHz (for Gemini input). */
 export function resample24kTo16k(input) {
-    const samples = new Int16Array(input);
+    // Int16Array requires even byte length; truncate trailing odd byte if present
+    const byteLen = input.byteLength % 2 === 0 ? input.byteLength : input.byteLength - 1;
+    if (byteLen <= 0)
+        return new ArrayBuffer(0);
+    const samples = new Int16Array(byteLen === input.byteLength ? input : input.slice(0, byteLen));
     const inRate = 24000;
     const outRate = 16000;
     const ratio = inRate / outRate;

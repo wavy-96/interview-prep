@@ -11,6 +11,7 @@ import {
   unregisterSessionSocket,
 } from "./timer.js";
 import { startWorkers } from "./workers.js";
+import { removeSession } from "./code-session-store.js";
 
 const PORT = parseInt(process.env.PORT ?? "8080", 10);
 const startTime = Date.now();
@@ -128,6 +129,7 @@ wss.on("connection", async (ws, req) => {
 
     ws.on("close", () => {
       unregisterSessionSocket(session.sessionId, ws);
+      removeSession(session.sessionId);
       voiceProvider?.disconnect();
       connectionCount--;
     });

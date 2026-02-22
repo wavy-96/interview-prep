@@ -5,6 +5,8 @@ import { markSessionErrored } from "./session-status.js";
 import { resample24kTo16k } from "./audio-utils.js";
 const GEMINI_MODEL = "gemini-2.5-flash-preview-native-audio";
 const GEMINI_WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
+const MAX_RETRIES = 3;
+const RETRY_DELAYS_MS = [1000, 2000, 4000];
 function extractTranscriptFromGemini(sessionId, msg) {
     const ts = Date.now();
     const content = msg.serverContent ?? msg.server_content;
@@ -47,6 +49,12 @@ export function createGeminiProvider(session, callbacks) {
     const url = `${GEMINI_WS_BASE}?key=${encodeURIComponent(apiKey.trim())}`;
     let ws = null;
     let isClosed = false;
+    let retryAttempt = 0;
+    /** Strip API key from error messages to prevent leakage in logs. */
+    function sanitizeError(err) {
+        const msg = err?.message ?? String(err);
+        return msg.replace(/key=[^&\s]+/gi, "key=***");
+    }
     async function cleanup() {
         if (isClosed)
             return;
@@ -103,7 +111,7 @@ export function createGeminiProvider(session, callbacks) {
                 ws.send(JSON.stringify(setup));
             }
             catch (err) {
-                console.error("[Gemini] Session config error:", err?.message);
+                console.error("[Gemini] Session config error:", sanitizeError(err));
                 callbacks.onError("provider_unavailable", "Failed to configure session");
                 cleanup();
             }
@@ -142,16 +150,25 @@ export function createGeminiProvider(session, callbacks) {
         });
         socket.on("error", (err) => {
             if (!isClosed) {
-                console.error("[Gemini] WebSocket error:", err?.message);
+                console.error("[Gemini] WebSocket error:", sanitizeError(err));
             }
         });
         socket.on("close", () => {
             if (isClosed)
                 return;
             ws = null;
-            markSessionErrored(session.sessionId).catch(() => { });
-            callbacks.onError("provider_unavailable", "Voice provider unavailable. Please try again.");
-            cleanup();
+            if (retryAttempt < MAX_RETRIES) {
+                const delay = RETRY_DELAYS_MS[retryAttempt] ?? 4000;
+                retryAttempt++;
+                console.log(`[Gemini] Reconnecting in ${delay}ms (attempt ${retryAttempt}/${MAX_RETRIES})`);
+                setTimeout(doConnect, delay);
+            }
+            else {
+                console.error("[Gemini] All retries exhausted");
+                markSessionErrored(session.sessionId).catch(() => { });
+                callbacks.onError("provider_unavailable", "Voice provider unavailable. Please try again.");
+                cleanup();
+            }
         });
     }
     doConnect();
@@ -188,7 +205,7 @@ export function createGeminiProvider(session, callbacks) {
             }
         }
         catch (err) {
-            console.error("[Gemini] Send error:", err?.message);
+            console.error("[Gemini] Send error:", sanitizeError(err));
             callbacks.onError("provider_unavailable");
         }
     }
@@ -196,12 +213,14 @@ export function createGeminiProvider(session, callbacks) {
         if (isClosed || !ws || ws.readyState !== WebSocket.OPEN)
             return;
         try {
+            // Send as a model turn to prime the AI with what to say,
+            // rather than as a user turn which could be treated as candidate speech.
             ws.send(JSON.stringify({
                 clientContent: {
                     turns: [
                         {
-                            role: "user",
-                            parts: [{ text: `[System: Say this aloud naturally: "${text}"]` }],
+                            role: "model",
+                            parts: [{ text: `Naturally mention to the candidate: ${text}. Say it conversationally as part of the interview flow.` }],
                         },
                     ],
                     turnComplete: true,
@@ -209,13 +228,14 @@ export function createGeminiProvider(session, callbacks) {
             }));
         }
         catch (err) {
-            console.error("[Gemini] injectTimeWarning error:", err?.message);
+            console.error("[Gemini] injectTimeWarning error:", sanitizeError(err));
         }
     }
     return {
         send,
         injectTimeWarning,
         disconnect() {
+            retryAttempt = MAX_RETRIES;
             cleanup();
         },
     };

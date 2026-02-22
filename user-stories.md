@@ -594,13 +594,15 @@ After **every completed epic**:
 **I want** a VS Code-style code editor in the interview screen,
 **so that** I can write code comfortably.
 
+**Completion:** @monaco-editor/react with next/dynamic ssr:false. Syntax highlighting (Python, JS, Java), dark theme, line numbers, bracket matching, auto-indent. Resizable split pane (problem left, editor right). Run Code button placeholder.
+
 **Success Criteria:**
-- [ ] Monaco Editor rendered in the interview page with syntax highlighting for Python, JavaScript, Java
-- [ ] Language selector switches Monaco language mode and loads starter code template
-- [ ] Editor supports: line numbers, bracket matching, auto-indent, undo/redo
-- [ ] Dark theme by default
-- [ ] Editor state (code + cursor position) preserved across WS reconnections
-- [ ] Editor pane is resizable relative to the problem description pane
+- [x] Monaco Editor rendered in the interview page with syntax highlighting for Python, JavaScript, Java
+- [x] Language selector switches Monaco language mode and loads starter code template (session language)
+- [x] Editor supports: line numbers, bracket matching, auto-indent, undo/redo
+- [x] Dark theme by default
+- [ ] Editor state (code + cursor position) preserved across WS reconnections (Story 5.2)
+- [x] Editor pane is resizable relative to the problem description pane
 
 **⚠️ Risks & Common Mistakes:**
 - **Monaco bundle size** — Monaco is ~2MB; it MUST be loaded via `next/dynamic` with `ssr: false` or the page load time is terrible
@@ -616,12 +618,14 @@ After **every completed epic**:
 **I want** code changes streamed to the server in real-time,
 **so that** the AI can observe what the user is writing.
 
+**Completion:** InterviewWsProvider shares WS with VoiceInterview via wsRef. 300ms debounced code_edit over WS. 50KB client-side limit. Server code-session-store persists to Supabase every 30s. Programmatic changes (starter code load) filtered.
+
 **Success Criteria:**
-- [ ] Monaco `onChange` debounced to 300ms fires a `code_edit` WS event
-- [ ] Event payload: `{ type: 'code_edit', code: string, language: string }`
-- [ ] After initial full sync, subsequent events send only the full code (diff-based deferred to post-MVP)
-- [ ] Server persists a code snapshot to Supabase every 30 seconds
-- [ ] Max code size enforced client-side (50KB) before sending
+- [x] Monaco `onChange` debounced to 300ms fires a `code_edit` WS event
+- [x] Event payload: `{ type: 'code_edit', code: string, language: string }`
+- [x] After initial full sync, subsequent events send only the full code (diff-based deferred to post-MVP)
+- [x] Server persists a code snapshot to Supabase every 30 seconds
+- [x] Max code size enforced client-side (50KB) before sending
 - [ ] Code changes are also fed into the voice agent's context (so interviewer can reference code)
 
 **⚠️ Risks & Common Mistakes:**

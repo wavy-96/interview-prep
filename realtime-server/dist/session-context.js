@@ -1,27 +1,18 @@
 import { getSupabase } from "./supabase.js";
 /** Get subscription_tier for a session (from user's profile). Used for voice provider routing. */
 export async function getSubscriptionTier(sessionId) {
-    const supabase = getSupabase();
-    if (!supabase)
-        return "free";
-    const { data: session } = await supabase
-        .from("sessions")
-        .select("user_id")
-        .eq("id", sessionId)
-        .single();
-    if (!session?.user_id)
-        return "free";
-    const { data: profile } = await supabase
-        .from("profiles")
-        .select("subscription_tier")
-        .eq("id", session.user_id)
-        .single();
-    const tier = profile?.subscription_tier;
-    if (tier === "pro" || tier === "enterprise")
-        return tier;
-    return "free";
+    // Use the shared loader which caches session+profile data
+    const ctx = await getSessionContextWithTier(sessionId);
+    return ctx?.subscriptionTier ?? "free";
 }
-export async function getSessionContext(sessionId) {
+// Simple per-session cache to avoid repeated DB queries within the same connection.
+// Entries are evicted after 60s to keep memory bounded.
+const contextCache = new Map();
+const CACHE_TTL_MS = 60_000;
+async function getSessionContextWithTier(sessionId) {
+    const cached = contextCache.get(sessionId);
+    if (cached && Date.now() - cached.ts < CACHE_TTL_MS)
+        return cached.data;
     const supabase = getSupabase();
     if (!supabase)
         return null;
@@ -41,22 +32,36 @@ export async function getSessionContext(sessionId) {
             .single();
         problem = p;
     }
+    // Single profile query fetches both experience_level and subscription_tier
     let experienceLevel = null;
+    let subscriptionTier = "free";
     const { data: profile } = await supabase
         .from("profiles")
-        .select("experience_level")
+        .select("experience_level, subscription_tier")
         .eq("id", session.user_id)
         .single();
-    if (profile && typeof profile.experience_level === "string") {
-        experienceLevel = profile.experience_level;
+    if (profile) {
+        const p = profile;
+        if (typeof p.experience_level === "string") {
+            experienceLevel = p.experience_level;
+        }
+        if (p.subscription_tier === "pro" || p.subscription_tier === "enterprise") {
+            subscriptionTier = p.subscription_tier;
+        }
     }
-    return {
+    const result = {
         problemTitle: problem?.title ?? "Coding Problem",
         problemDescription: problem?.description ?? "",
         difficulty: problem?.difficulty ?? "medium",
         language: session.language ?? "python",
         experienceLevel,
+        subscriptionTier,
     };
+    contextCache.set(sessionId, { data: result, ts: Date.now() });
+    return result;
+}
+export async function getSessionContext(sessionId) {
+    return getSessionContextWithTier(sessionId);
 }
 /** Build system prompt for interviewer, kept under 2000 tokens (~750 words). */
 export function buildInterviewerInstructions(ctx) {
