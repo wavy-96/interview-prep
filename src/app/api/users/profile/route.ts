@@ -17,9 +17,10 @@ export type ProfileUpdateBody = {
   full_name?: string | null;
   experience_level?: "junior" | "mid" | "senior" | "staff" | null;
   target_companies?: string[] | null;
+  onboarding_completed?: boolean;
 };
 
-const ALLOWED_KEYS = ["full_name", "experience_level", "target_companies"] as const;
+const ALLOWED_KEYS = ["full_name", "experience_level", "target_companies", "onboarding_completed"] as const;
 
 export async function GET() {
   try {
@@ -97,12 +98,14 @@ export async function PATCH(request: Request) {
       if (key in body) {
         const value = (body as Record<string, unknown>)[key];
         if (key === "full_name") {
-          updates.full_name =
-            value === null || value === undefined
-              ? null
-              : typeof value === "string"
-                ? value
-                : null;
+          if (value === null || value === undefined) {
+            updates.full_name = null;
+          } else if (typeof value === "string") {
+            const trimmed = value.trim().slice(0, 200);
+            updates.full_name = trimmed || null;
+          } else {
+            updates.full_name = null;
+          }
         } else if (key === "experience_level") {
           const valid = ["junior", "mid", "senior", "staff"];
           if (value === null || value === undefined) {
@@ -122,6 +125,11 @@ export async function PATCH(request: Request) {
               : Array.isArray(value) && value.every((v) => typeof v === "string")
                 ? value
                 : null;
+        } else if (key === "onboarding_completed") {
+          // Write-once: only allow setting to true, never back to false
+          if (value === true) {
+            updates.onboarding_completed = true;
+          }
         }
       }
     }

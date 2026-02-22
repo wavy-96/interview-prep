@@ -245,17 +245,17 @@ After **every completed epic**:
 
 > **Keys needed:** Same as Epic 1 (Supabase).
 
-### Story 2.1 — Session & Related Tables
+### Story 2.1 — Session & Related Tables ✅
 **As a** developer,
 **I want** the remaining database tables created,
 **so that** interview sessions, transcripts, snapshots, and evaluations can be stored.
 
 **Success Criteria:**
-- [ ] Migration creates `sessions`, `transcripts`, `code_snapshots`, `evaluations`, `credit_transactions`, `payments`, `subscriptions` tables per schema
-- [ ] All RLS policies from `technical-architecture.md` are applied
-- [ ] Service-role policies exist for all tables (backend writes)
-- [ ] `updated_at` triggers fire on `profiles`, `sessions`
-- [ ] Credit update trigger fires on `credit_transactions` insert
+- [x] Migration creates `sessions`, `transcripts`, `code_snapshots`, `evaluations`, `credit_transactions`, `payments`, `subscriptions` tables per schema
+- [x] All RLS policies from `technical-architecture.md` are applied
+- [x] Service-role policies exist for all tables (backend writes)
+- [x] `updated_at` triggers fire on `profiles`, `sessions`
+- [x] Credit update trigger fires on `credit_transactions` insert
 
 **⚠️ Risks & Common Mistakes:**
 - **Foreign key cascade misconfiguration** — if a user deletes their account, cascade must properly clean up sessions → transcripts → snapshots → evaluations; test this path
@@ -265,18 +265,18 @@ After **every completed epic**:
 
 ---
 
-### Story 2.2— Session Lifecycle API
+### Story 2.2— Session Lifecycle API ✅
 **As a** user,
 **I want** to start, view, and end an interview session,
 **so that** each practice interview is tracked from start to finish.
 
 **Success Criteria:**
-- [ ] `POST /api/sessions/start` — creates session, deducts 1 credit, returns `{ sessionId, problem, wsToken }`; rejects if credits = 0
-- [ ] `GET /api/sessions/[sessionId]` — returns session details; 403 if not the owner
-- [ ] `POST /api/sessions/[sessionId]/end` — marks session completed, stores `ended_at` and `duration_seconds`
-- [ ] `GET /api/sessions` — lists the authenticated user's sessions (paginated, newest first)
-- [ ] Credit deduction is atomic (no double-spend on concurrent requests)
-- [ ] Session status transitions: `scheduled → active → completed|abandoned`
+- [x] `POST /api/sessions/start` — creates session, deducts 1 credit, returns `{ sessionId, problem, wsToken }`; rejects if credits = 0
+- [x] `GET /api/sessions/[sessionId]` — returns session details; 403 if not the owner
+- [x] `POST /api/sessions/[sessionId]/end` — marks session completed, stores `ended_at` and `duration_seconds`
+- [x] `GET /api/sessions` — lists the authenticated user's sessions (paginated, newest first)
+- [x] Credit deduction is atomic (no double-spend on concurrent requests)
+- [x] Session status transitions: `scheduled → active → completed|abandoned`
 
 **⚠️ Risks & Common Mistakes:**
 - **Double-spend race condition** — if user clicks "Start" twice quickly, two sessions may be created with only 1 credit; use `SELECT ... FOR UPDATE` or a Postgres advisory lock
@@ -287,17 +287,17 @@ After **every completed epic**:
 
 ---
 
-### Story 2.3— Code Snapshot API
+### Story 2.3— Code Snapshot API ✅
 **As a** user,
 **I want** my code saved periodically during an interview,
 **so that** my progress is preserved and reviewable.
 
 **Success Criteria:**
-- [ ] `POST /api/sessions/[sessionId]/code` — saves a code snapshot with `{ code, language, timestamp_ms }`
-- [ ] Validates session is `active` and owned by the authenticated user
-- [ ] Snapshot types: `auto` (periodic), `manual` (user-triggered), `execution` (before run), `final` (on session end)
-- [ ] Max code size enforced: 50KB per snapshot
-- [ ] `GET /api/sessions/[sessionId]` includes the latest code snapshot
+- [x] `POST /api/sessions/[sessionId]/code` — saves a code snapshot with `{ code, language, timestamp_ms }`
+- [x] Validates session is `active` and owned by the authenticated user
+- [x] Snapshot types: `auto` (periodic), `manual` (user-triggered), `execution` (before run), `final` (on session end)
+- [x] Max code size enforced: 50KB per snapshot
+- [x] `GET /api/sessions/[sessionId]` includes the latest code snapshot
 
 **⚠️ Risks & Common Mistakes:**
 - **No rate limiting on snapshot saves** — client could send a snapshot on every keystroke; enforce max 1 `auto` snapshot per 10 seconds server-side
@@ -307,18 +307,18 @@ After **every completed epic**:
 
 ---
 
-### Story 2.4— Interview Dashboard Page
+### Story 2.4— Interview Dashboard Page ✅
 **As a** user,
 **I want** a dashboard showing my past interviews and credits,
 **so that** I can see my history and remaining balance.
 
 **Success Criteria:**
-- [ ] `/dashboard` page shows: credit balance, total sessions, list of past sessions
-- [ ] Each session card shows: problem title, difficulty, date, duration, score (if evaluated)
-- [ ] "Start Interview" button navigates to problem selection
-- [ ] Problem selection page: pick difficulty → optional category filter → see random problem → confirm → session starts
-- [ ] Dashboard + problem selection are responsive (work at 375px mobile width)
-- [ ] Live interview route remains desktop-focused and uses the interview desktop gate (<1024px)
+- [x] `/dashboard` page shows: credit balance, total sessions, list of past sessions
+- [x] Each session card shows: problem title, difficulty, date, duration, score (if evaluated)
+- [x] "Start Interview" button navigates to problem selection
+- [x] Problem selection page: pick difficulty → optional category filter → see random problem → confirm → session starts
+- [x] Dashboard + problem selection are responsive (work at 375px mobile width)
+- [x] Live interview route remains desktop-focused and uses the interview desktop gate (<1024px)
 
 **⚠️ Risks & Common Mistakes:**
 - **N+1 query problem** — loading sessions, then evaluation for each, then problem for each = 3N+1 queries; use a single query with JOINs
@@ -493,12 +493,14 @@ After **every completed epic**:
 **I want** a provider abstraction layer for voice,
 **so that** we can route free-tier users to Gemini and paid users to OpenAI.
 
+**Completion:** VoiceProvider interface (send, injectTimeWarning, disconnect). OpenAIRealtimeProvider (existing openai-proxy). GeminiLiveProvider (Gemini 2.5 Flash native audio, 24→16kHz resampling). Factory routes by subscription_tier: free→Gemini (fallback OpenAI), pro/enterprise→OpenAI.
+
 **Success Criteria:**
-- [ ] `VoiceProvider` interface: `connect()`, `sendAudio()`, `onAudio()`, `disconnect()`, `injectContext()`
-- [ ] `OpenAIRealtimeProvider` implements the interface
-- [ ] `GeminiLiveProvider` implements the interface (Gemini Live API via WebSocket)
-- [ ] Provider selected based on user's `subscription_tier` from session metadata
-- [ ] Both providers produce identical transcript event shapes for downstream consumption
+- [x] `VoiceProvider` interface: `send()`, `injectTimeWarning()`, `disconnect()`
+- [x] `OpenAIRealtimeProvider` implements the interface
+- [x] `GeminiLiveProvider` implements the interface (Gemini Live API via WebSocket)
+- [x] Provider selected based on user's `subscription_tier` from session metadata
+- [x] Both providers produce identical transcript event shapes for downstream consumption
 - [ ] Integration test: connect → send 3s of silence → receive AI greeting → disconnect
 
 **⚠️ Risks & Common Mistakes:**
@@ -561,15 +563,17 @@ After **every completed epic**:
 **I want** a guided onboarding with a microphone test,
 **so that** I know my setup works before starting an interview.
 
+**Completion:** Migration adds `onboarding_completed` to profiles. `/onboarding` flow: Welcome, Mic test (audio level meter), Speaker test (Web Speech API), Layout walkthrough. Skip on each step. Dashboard/start redirect if not completed.
+
 **Success Criteria:**
-- [ ] First login triggers onboarding flow (tracked via `profiles.onboarding_completed` boolean)
-- [ ] Step 1: Welcome screen explaining how the platform works (3 bullet points + illustration)
-- [ ] Step 2: Microphone permission request + test — user speaks, sees audio level meter confirming mic works
-- [ ] Step 3: Speaker test — play a short AI greeting, user confirms they can hear it
-- [ ] Step 4: Quick walkthrough of the interview screen layout (annotated screenshot or overlay)
-- [ ] "Skip" button available on each step (experienced users can skip)
-- [ ] Onboarding state persisted — returning users go straight to dashboard
-- [ ] If mic test fails, show troubleshooting tips (check browser permissions, try different browser)
+- [x] First login triggers onboarding flow (tracked via `profiles.onboarding_completed` boolean)
+- [x] Step 1: Welcome screen explaining how the platform works (3 bullet points + illustration)
+- [x] Step 2: Microphone permission request + test — user speaks, sees audio level meter confirming mic works
+- [x] Step 3: Speaker test — play a short AI greeting, user confirms they can hear it
+- [x] Step 4: Quick walkthrough of the interview screen layout (annotated screenshot or overlay)
+- [x] "Skip" button available on each step (experienced users can skip)
+- [x] Onboarding state persisted — returning users go straight to dashboard
+- [x] If mic test fails, show troubleshooting tips (check browser permissions, try different browser)
 
 **⚠️ Risks & Common Mistakes:**
 - **Mic test false negatives** — audio level threshold set too high means quiet mics fail; use a low threshold and show a visual meter so users can self-assess

@@ -1471,3 +1471,7 @@ jobs:
 | 1.4a Problems | ✅ Implemented | problems, test_cases, problem_solutions migration, RLS, GET /api/problems, /api/problems/[slug], /api/problems/random, 3 seeded problems, dashboard + problem detail pages |
 | 1.4b Seed 50 Problems | ✅ Implemented | `npm run db:seed`, scripts/seed-problems.ts + scripts/data/problems.ts, 50 problems (25 easy + 25 medium), ≥2 example + ≥3 hidden test cases each, starter code + solutions for Python/JS/Java |
 | 1.5 Landing Page | ✅ Implemented | hero, features, pricing (config), footer, Terms/Privacy placeholders, SEO meta, auth redirect |
+| 2.1 Session Tables | ✅ Implemented | sessions, transcripts, code_snapshots, evaluations, credit_transactions, payments, subscriptions, RLS, triggers |
+| 2.2 Session Lifecycle API | ✅ Implemented | POST /api/sessions/start (RPC), GET /api/sessions, GET /api/sessions/[id], POST /api/sessions/[id]/end |
+| 2.3 Code Snapshot API | ✅ Implemented | POST /api/sessions/[id]/code, 50KB limit, auto snapshot rate limit (10s) |
+| 2.4 Interview Dashboard | ✅ Implemented | /dashboard with sessions list, /dashboard/start problem selection, /interview/[id] placeholder, /sessions/[id] summary |

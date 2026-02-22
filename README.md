@@ -15,6 +15,11 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 Copy `.env.local.example` to `.env.local` and fill in the required keys for each epic. See `user-stories.md` for the pre-requisites table.
 
+**Epic 4 (Voice):**
+- `OPENAI_API_KEY` — OpenAI Realtime API (paid users)
+- `GOOGLE_GEMINI_API_KEY` or `GEMINI_API_KEY` — Gemini Live API (free-tier fallback)
+- Realtime server: `REALTIME_TOKEN_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `REDIS_URL` (optional)
+
 **Epic 1 (Auth & Profiles):**
 - `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon/public key
