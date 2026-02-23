@@ -444,19 +444,19 @@ After **every completed epic**:
 > **Keys needed:** OpenAI API key (Realtime access), Google Gemini API key
 > **Prompt user for keys before starting this epic.**
 
-### Story 4.1a — OpenAI Realtime API Proxy (Core Audio)
+### Story 4.1a — OpenAI Realtime API Proxy (Core Audio) ✅
 **As a** user,
 **I want** my voice streamed to the AI interviewer and its responses played back,
 **so that** I can have a real-time voice conversation.
 
 **Success Criteria:**
-- [ ] Fly.io server opens a WebSocket to `wss://api.openai.com/v1/realtime` on session start using model `gpt-realtime`
-- [ ] Client audio frames (`input_audio_buffer.append`) are proxied to OpenAI
-- [ ] OpenAI audio responses are proxied back to client
-- [ ] System prompt injected with problem context, candidate level, and interviewer personality (kept under 2000 tokens)
-- [ ] Session configured with VAD (voice activity detection) enabled
-- [ ] Audio format validated: 16-bit PCM at 24kHz mono
-- [ ] Both WebSocket connections (client + OpenAI) cleaned up on disconnect (no memory leak)
+- [x] Fly.io server opens a WebSocket to `wss://api.openai.com/v1/realtime` on session start using model `gpt-realtime`
+- [x] Client audio frames (`input_audio_buffer.append`) are proxied to OpenAI
+- [x] OpenAI audio responses are proxied back to client
+- [x] System prompt injected with problem context, candidate level, and interviewer personality (kept under 2000 tokens)
+- [x] Session configured with VAD (voice activity detection) enabled
+- [x] Audio format validated: 16-bit PCM at 24kHz mono
+- [x] Both WebSocket connections (client + OpenAI) cleaned up on disconnect (no memory leak)
 
 **⚠️ Risks & Common Mistakes:**
 - **Using deprecated model name** — `gpt-4o-realtime-preview` was deprecated; use `gpt-realtime` or `gpt-realtime-mini` (Feb 2026 naming)
@@ -466,19 +466,19 @@ After **every completed epic**:
 
 ---
 
-### Story 4.1b — Transcript Storage & Connection Resilience
+### Story 4.1b — Transcript Storage & Connection Resilience ✅
 **As a** developer,
 **I want** voice transcripts stored durably and connections to handle errors,
 **so that** we have conversation records and recover from transient failures.
 
 **Success Criteria:**
-- [ ] Transcript chunks (`conversation.item.created`) are batched and stored to Supabase `transcripts` table every 5 seconds
-- [ ] Batch insert uses upsert to handle duplicates from retries
-- [ ] Connection errors to OpenAI trigger up to 3 retries with exponential backoff (1s, 2s, 4s)
-- [ ] If all retries fail, client receives `{ type: 'error', code: 'provider_unavailable' }` and session is marked `errored`
-- [ ] OpenAI 429 (rate limit) responses handled gracefully: back off, notify client
-- [ ] Unit test: verify transcript batching inserts correct records
-- [ ] Unit test: simulate OpenAI disconnect → verify retry logic fires
+- [x] Transcript chunks (`conversation.item.created`) are batched and stored to Supabase `transcripts` table every 5 seconds
+- [x] Batch insert uses upsert to handle duplicates from retries
+- [x] Connection errors to OpenAI trigger up to 3 retries with exponential backoff (1s, 2s, 4s)
+- [x] If all retries fail, client receives `{ type: 'error', code: 'provider_unavailable' }` and session is marked `errored`
+- [x] OpenAI 429 (rate limit) responses handled gracefully: back off, notify client
+- [x] Unit test: verify transcript batching inserts correct records
+- [x] Unit test: simulate OpenAI disconnect → verify retry logic fires
 
 **⚠️ Risks & Common Mistakes:**
 - **Transcript storage flooding** — inserting per-event instead of batched overwhelms the database; batch every 5 seconds
@@ -511,19 +511,19 @@ After **every completed epic**:
 
 ---
 
-### Story 4.3— Client Audio Capture & Playback
+### Story 4.3— Client Audio Capture & Playback ✅
 **As a** user,
 **I want** my browser to capture my microphone and play AI audio,
 **so that** the voice interview works end-to-end.
 
 **Success Criteria:**
-- [ ] Browser requests `getUserMedia({ audio: true })` with proper error handling
-- [ ] Audio captured as 16-bit PCM, 24kHz, chunked into 100ms frames
-- [ ] Frames sent as `input_audio_buffer.append` events over WS
-- [ ] Incoming AI audio frames decoded and played via Web Audio API
-- [ ] Client-side VAD prevents sending silence (reduces bandwidth + cost)
-- [ ] Mute/unmute toggle works without dropping the WS connection
-- [ ] Microphone permission denial shows a clear error message with retry button
+- [x] Browser requests `getUserMedia({ audio: true })` with proper error handling
+- [x] Audio captured as 16-bit PCM, 24kHz, chunked into 100ms frames
+- [x] Frames sent as `input_audio_buffer.append` events over WS
+- [x] Incoming AI audio frames decoded and played via Web Audio API
+- [x] Client-side VAD prevents sending silence (reduces bandwidth + cost)
+- [x] Mute/unmute toggle works without dropping the WS connection
+- [x] Microphone permission denial shows a clear error message with retry button
 
 **⚠️ Risks & Common Mistakes:**
 - **HTTPS required** — `getUserMedia` is blocked on HTTP; development must use `localhost` (special-cased) or an HTTPS tunnel
@@ -535,19 +535,19 @@ After **every completed epic**:
 
 ---
 
-### Story 4.4— Timer & Session Flow Control
+### Story 4.4— Timer & Session Flow Control ✅
 **As a** user,
 **I want** a countdown timer that ends my interview when time is up,
 **so that** the interview simulates real time pressure.
 
 **Success Criteria:**
-- [ ] Timer is server-authoritative: Fly.io starts countdown on session activation
-- [ ] Timer state stored in Redis; broadcast to client every 5 seconds
-- [ ] Client displays countdown but cannot control it
-- [ ] At 5-min and 1-min marks, the AI interviewer gives a verbal time warning
-- [ ] On expiry, server emits `session.ended` event; client auto-navigates to summary
-- [ ] If WS drops and reconnects, timer resumes from server state (no reset)
-- [ ] "End Early" button sends `session.ended` event and stops the timer
+- [x] Timer is server-authoritative: Fly.io starts countdown on session activation
+- [x] Timer state stored in Redis; broadcast to client every 5 seconds
+- [x] Client displays countdown but cannot control it
+- [x] At 5-min and 1-min marks, the AI interviewer gives a verbal time warning
+- [x] On expiry, server emits `session.ended` event; client auto-navigates to summary
+- [x] If WS drops and reconnects, timer resumes from server state (no reset)
+- [x] "End Early" button sends `session.ended` event and stops the timer
 
 **⚠️ Risks & Common Mistakes:**
 - **Client-side timer drift** — `setInterval` is not precise and drifts on background tabs (Chrome throttles to 1/min); always re-sync from server time

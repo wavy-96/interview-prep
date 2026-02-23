@@ -11,6 +11,18 @@ function createRedisClient() {
 }
 const memoryStore = new Map();
 export const redis = {
+    async markUsedIfUnused(jti) {
+        if (REDIS_URL) {
+            const c = getClient();
+            const result = await c.set(`jti:${jti}`, "1", "EX", JTI_TTL, "NX");
+            return result === "OK";
+        }
+        if (memoryStore.has(jti))
+            return false;
+        memoryStore.set(jti, Date.now());
+        setTimeout(() => memoryStore.delete(jti), JTI_TTL * 1000);
+        return true;
+    },
     async isUsed(jti) {
         if (REDIS_URL) {
             const c = getClient();
@@ -37,14 +49,7 @@ export const redis = {
         return next;
     },
     async markUsed(jti) {
-        if (REDIS_URL) {
-            const c = getClient();
-            await c.setex(`jti:${jti}`, JTI_TTL, "1");
-        }
-        else {
-            memoryStore.set(jti, Date.now());
-            setTimeout(() => memoryStore.delete(jti), JTI_TTL * 1000);
-        }
+        await this.markUsedIfUnused(jti);
     },
     async xadd(stream, ...fields) {
         if (!REDIS_URL)

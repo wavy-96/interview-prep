@@ -246,12 +246,22 @@ export default async function SessionPage({
             </section>
           )}
 
-          <Link
-            href="/dashboard/start"
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-clay px-4 py-2 text-sm font-medium text-white hover:bg-brand-clay/90"
-          >
-            Practice Again
-          </Link>
+          <div className="flex flex-wrap items-center gap-4">
+            {session.status === "completed" && (
+              <Link
+                href={`/sessions/${sessionId}/summary`}
+                className="text-body-sm text-brand-clay hover:underline"
+              >
+                View full summary →
+              </Link>
+            )}
+            <Link
+              href="/dashboard/start"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-clay px-4 py-2 text-sm font-medium text-white hover:bg-brand-clay/90"
+            >
+              Practice Again
+            </Link>
+          </div>
         </div>
       </div>
     </div>

@@ -7,10 +7,19 @@ export const metadata = {
   description: "Select a problem and start your practice interview",
 };
 
+function pickDeterministicIndex(seed: string, length: number): number {
+  if (length <= 1) return 0;
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  }
+  return hash % length;
+}
+
 export default async function StartInterviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ difficulty?: string; category?: string }>;
+  searchParams: Promise<{ difficulty?: string; category?: string; _t?: string }>;
 }) {
   const supabase = await createClient();
   const {
@@ -32,7 +41,7 @@ export default async function StartInterviewPage({
   }
 
   const params = await searchParams;
-  const { difficulty, category } = params;
+  const { difficulty, category, _t } = params;
   const hasFilters = !!difficulty || !!category;
 
   let problem = null;
@@ -51,8 +60,9 @@ export default async function StartInterviewPage({
 
     const { data: problems } = await query;
     if (problems && problems.length > 0) {
-      const randomIndex = Math.floor(Math.random() * problems.length);
-      problem = problems[randomIndex];
+      const seed = _t?.trim() || `${difficulty ?? ""}:${category ?? ""}`;
+      const selectedIndex = pickDeterministicIndex(seed, problems.length);
+      problem = problems[selectedIndex];
     }
   }
 

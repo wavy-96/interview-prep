@@ -1,5 +1,6 @@
 import { redis } from "./redis.js";
 import { markSessionCompleted } from "./session-status.js";
+import { flushNow } from "./transcript-store.js";
 
 const REDIS_URL = process.env.REDIS_URL;
 const DEFAULT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
@@ -109,7 +110,9 @@ async function deleteTimer(sessionId: string): Promise<void> {
 export async function startOrResumeTimer(sessionId: string): Promise<{ remainingMs: number; expiresAt: number }> {
   let expiresAt = await getExpiresAt(sessionId);
   const now = Date.now();
-  if (expiresAt <= 0 || expiresAt <= now) {
+  // Only initialize once per session. If a stored timer is already expired,
+  // keep it expired so reconnects cannot extend interview duration.
+  if (expiresAt <= 0) {
     expiresAt = now + DEFAULT_DURATION_MS;
     await setExpiresAt(sessionId, expiresAt);
   }
@@ -180,8 +183,15 @@ async function emitSessionEnded(sessionId: string): Promise<void> {
   warnedMilestones.delete(sessionId);
   endedSessions.add(sessionId);
   await stopTimer(sessionId);
-  markSessionCompleted(sessionId).catch((err) =>
-    console.error("[Timer] markSessionCompleted error:", (err as Error)?.message)
+  await flushNow(sessionId);
+  await markSessionCompleted(sessionId).catch((err) => {
+    console.error("[Timer] markSessionCompleted error:", (err as Error)?.message);
+  });
+  await redis.xadd(
+    "events",
+    "type", "session.ended",
+    "sessionId", sessionId,
+    "payload", "{}"
   );
 }
 

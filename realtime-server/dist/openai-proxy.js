@@ -160,8 +160,8 @@ export function createOpenAIProxy(session, callbacks) {
         socket.on("message", (data) => {
             if (isClosed)
                 return;
+            const str = typeof data === "string" ? data : data.toString();
             try {
-                const str = typeof data === "string" ? data : data.toString();
                 const msg = JSON.parse(str);
                 extractTranscriptFromMessage(session.sessionId, msg);
                 if (msg.type === "error") {
@@ -176,7 +176,7 @@ export function createOpenAIProxy(session, callbacks) {
             catch {
                 /* ignore parse errors */
             }
-            callbacks.onMessage(data);
+            callbacks.onMessage(str);
         });
         socket.on("error", (err) => {
             if (!isClosed) {

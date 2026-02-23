@@ -36,11 +36,9 @@ export const auth = {
 
       if (!userId || !sessionId) return null;
 
-      if (jti && (await redis.isUsed(jti))) {
-        return null;
-      }
       if (jti) {
-        await redis.markUsed(jti);
+        const accepted = await redis.markUsedIfUnused(jti);
+        if (!accepted) return null;
       }
 
       const { data, error } = await supabase

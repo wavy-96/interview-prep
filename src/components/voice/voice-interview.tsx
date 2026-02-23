@@ -6,12 +6,20 @@ import { Mic, MicOff, Loader2, AlertCircle, Clock } from "lucide-react";
 
 const TARGET_SAMPLE_RATE = 24000;
 const CHUNK_MS = 100;
+const VAD_THRESHOLD = 0.01;
+
+function computeRMS(samples: Float32Array): number {
+  let sum = 0;
+  for (let i = 0; i < samples.length; i++) {
+    sum += samples[i] * samples[i];
+  }
+  return Math.sqrt(sum / samples.length);
+}
 
 interface VoiceInterviewProps {
-  sessionId: string;
   wsToken: string | null;
   wsUrl: string;
-  wsRef?: React.MutableRefObject<WebSocket | null>;
+  onSocketChange?: (socket: WebSocket | null) => void;
   onError?: (message: string) => void;
   onSessionEnded?: () => void;
 }
@@ -30,10 +38,9 @@ function getTimerColor(ms: number): string {
 }
 
 export function VoiceInterview({
-  sessionId,
   wsToken,
   wsUrl,
-  wsRef: externalWsRef,
+  onSocketChange,
   onError,
   onSessionEnded,
 }: VoiceInterviewProps) {
@@ -44,32 +51,45 @@ export function VoiceInterview({
   const thinkingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionEndedRef = useRef(false);
   const micMutedRef = useRef(false);
-  micMutedRef.current = micMuted;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isMicPermissionError, setIsMicPermissionError] = useState(false);
   const internalWsRef = useRef<WebSocket | null>(null);
-  const wsRef = externalWsRef ?? internalWsRef;
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const playbackQueueRef = useRef<Float32Array[]>([]);
   const isPlayingRef = useRef(false);
+  const aiSpeakingRef = useRef(false);
 
   // Use refs for callback props to avoid re-creating callbacks when props change
   const onErrorRef = useRef(onError);
-  onErrorRef.current = onError;
   const onSessionEndedRef = useRef(onSessionEnded);
-  onSessionEndedRef.current = onSessionEnded;
 
-  const reportError = useCallback((msg: string) => {
+  useEffect(() => {
+    micMutedRef.current = micMuted;
+  }, [micMuted]);
+
+  useEffect(() => {
+    aiSpeakingRef.current = aiStatus === "speaking";
+  }, [aiStatus]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
+    onSessionEndedRef.current = onSessionEnded;
+  }, [onSessionEnded]);
+
+  const processPlaybackQueueRef = useRef<() => void>(() => {});
+
+  const reportError = useCallback((msg: string, micPermission = false) => {
     setErrorMessage(msg);
+    setIsMicPermissionError(micPermission);
     setStatus("error");
     onErrorRef.current?.(msg);
   }, []);
-
-  // Playback uses a ref-based approach to avoid stale closure issues between
-  // processPlaybackQueue and playAudioChunk calling each other.
-  const processPlaybackQueueRef = useRef<() => void>(() => {});
 
   const processPlaybackQueue = useCallback(() => {
     if (isPlayingRef.current || playbackQueueRef.current.length === 0) return;
@@ -90,7 +110,9 @@ export function VoiceInterview({
     source.start();
   }, []);
 
-  processPlaybackQueueRef.current = processPlaybackQueue;
+  useEffect(() => {
+    processPlaybackQueueRef.current = processPlaybackQueue;
+  }, [processPlaybackQueue]);
 
   const playAudioChunk = useCallback(
     (base64Audio: string) => {
@@ -114,20 +136,103 @@ export function VoiceInterview({
     []
   );
 
+  const startMic = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+
+      const ctx = new (window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({
+        sampleRate: 48000,
+      });
+      audioContextRef.current = ctx;
+      await ctx.resume();
+
+      const source = ctx.createMediaStreamSource(stream);
+      sourceRef.current = source;
+
+      // ScriptProcessorNode is deprecated in favor of AudioWorkletNode.
+      // Using it here for MVP simplicity; migrate to AudioWorklet for production.
+      const processor = ctx.createScriptProcessor(4096, 1, 1);
+      processorRef.current = processor;
+
+      const sendChunk = (samples: Float32Array) => {
+        if (
+          micMutedRef.current ||
+          aiSpeakingRef.current ||
+          !internalWsRef.current ||
+          internalWsRef.current.readyState !== WebSocket.OPEN
+        ) {
+          return;
+        }
+        const rms = computeRMS(samples);
+        if (rms < VAD_THRESHOLD) return;
+        const int16 = new Int16Array(samples.length);
+        for (let i = 0; i < samples.length; i++) {
+          const s = Math.max(-1, Math.min(1, samples[i]));
+          int16[i] = s < 0 ? s * 32768 : s * 32767;
+        }
+        const resampled = resample48to24(int16);
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(resampled.buffer)));
+        internalWsRef.current.send(
+          JSON.stringify({ type: "input_audio_buffer.append", audio: base64 })
+        );
+      };
+
+      const buffer: number[] = [];
+      const samplesNeeded = Math.floor((48000 * CHUNK_MS) / 1000 / 2);
+
+      processor.onaudioprocess = (e) => {
+        const input = e.inputBuffer.getChannelData(0);
+        for (let i = 0; i < input.length; i++) {
+          buffer.push(input[i]);
+        }
+        while (buffer.length >= samplesNeeded) {
+          const chunk = buffer.splice(0, samplesNeeded);
+          sendChunk(new Float32Array(chunk));
+        }
+      };
+
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = 0;
+      source.connect(processor);
+      processor.connect(gainNode);
+      gainNode.connect(ctx.destination);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Microphone access denied";
+      const isPermission =
+        msg.toLowerCase().includes("permission") ||
+        msg.toLowerCase().includes("denied") ||
+        msg.toLowerCase().includes("not allowed");
+      reportError(msg, isPermission);
+    }
+  }, [reportError]);
+
+  const stopMic = useCallback(() => {
+    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    mediaStreamRef.current = null;
+    processorRef.current?.disconnect();
+    processorRef.current = null;
+    sourceRef.current?.disconnect();
+    sourceRef.current = null;
+  }, []);
+
   useEffect(() => {
     if (!wsToken?.trim() || !wsUrl?.trim()) {
-      setStatus("idle");
       return;
     }
 
-    setStatus("connecting");
     const url = wsUrl.startsWith("ws") ? wsUrl : wsUrl.replace(/^http/, "ws");
     const ws = new WebSocket(url, wsToken);
-    wsRef.current = ws;
+    internalWsRef.current = ws;
+    onSocketChange?.(ws);
 
     ws.onopen = () => {
       setStatus("connected");
       setErrorMessage(null);
+      startMic().catch(() => {
+        // startMic reports its own errors
+      });
       ws.send(JSON.stringify({ type: "session.ping" }));
     };
 
@@ -135,7 +240,7 @@ export function VoiceInterview({
       try {
         const msg = JSON.parse(event.data as string);
         if (msg.type === "error") {
-          reportError(msg.message ?? msg.code ?? "Connection error");
+          reportError(msg.message ?? msg.code ?? "Connection error", false);
           return;
         }
         if (msg.type === "response.output_audio.delta" && msg.delta) {
@@ -190,95 +295,34 @@ export function VoiceInterview({
     };
 
     ws.onerror = () => {
-      reportError("WebSocket connection failed");
+      reportError("WebSocket connection failed", false);
     };
 
     ws.onclose = () => {
-      wsRef.current = null;
+      internalWsRef.current = null;
+      onSocketChange?.(null);
+      stopMic();
       setStatus((s) => (s === "error" ? s : "idle"));
     };
 
     return () => {
       if (thinkingTimeoutRef.current) clearTimeout(thinkingTimeoutRef.current);
       ws.close();
-      wsRef.current = null;
+      internalWsRef.current = null;
+      onSocketChange?.(null);
+      stopMic();
     };
-  }, [wsToken, wsUrl, reportError, playAudioChunk]);
-
-  const startMic = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
-
-      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({
-        sampleRate: 48000,
-      });
-      audioContextRef.current = ctx;
-      await ctx.resume();
-
-      const source = ctx.createMediaStreamSource(stream);
-      sourceRef.current = source;
-
-      // ScriptProcessorNode is deprecated in favor of AudioWorkletNode.
-      // Using it here for MVP simplicity; migrate to AudioWorklet for production.
-      const processor = ctx.createScriptProcessor(4096, 1, 1);
-      processorRef.current = processor;
-
-      const sendChunk = (samples: Float32Array) => {
-        if (micMutedRef.current || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-        const int16 = new Int16Array(samples.length);
-        for (let i = 0; i < samples.length; i++) {
-          const s = Math.max(-1, Math.min(1, samples[i]));
-          int16[i] = s < 0 ? s * 32768 : s * 32767;
-        }
-        const resampled = resample48to24(int16);
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(resampled.buffer)));
-        wsRef.current.send(
-          JSON.stringify({ type: "input_audio_buffer.append", audio: base64 })
-        );
-      };
-
-      let buffer: number[] = [];
-      const samplesNeeded = Math.floor((48000 * CHUNK_MS) / 1000 / 2);
-
-      processor.onaudioprocess = (e) => {
-        const input = e.inputBuffer.getChannelData(0);
-        for (let i = 0; i < input.length; i++) {
-          buffer.push(input[i]);
-        }
-        while (buffer.length >= samplesNeeded) {
-          const chunk = buffer.splice(0, samplesNeeded);
-          sendChunk(new Float32Array(chunk));
-        }
-      };
-
-      const gainNode = ctx.createGain();
-      gainNode.gain.value = 0;
-      source.connect(processor);
-      processor.connect(gainNode);
-      gainNode.connect(ctx.destination);
-    } catch (err) {
-      reportError(
-        err instanceof Error ? err.message : "Microphone access denied"
-      );
-    }
-  }, [reportError]);
-
-  const stopMic = useCallback(() => {
-    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
-    mediaStreamRef.current = null;
-    processorRef.current?.disconnect();
-    processorRef.current = null;
-    sourceRef.current?.disconnect();
-    sourceRef.current = null;
-  }, []);
+  }, [wsToken, wsUrl, reportError, playAudioChunk, onSocketChange, startMic, stopMic]);
 
   useEffect(() => {
-    if (status === "connected") {
-      startMic();
-    }
-    return () => stopMic();
-  }, [status, startMic, stopMic]);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && audioContextRef.current?.state === "suspended") {
+        audioContextRef.current.resume();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
 
   // Client-side countdown between server broadcasts (every 5s)
   useEffect(() => {
@@ -360,8 +404,8 @@ export function VoiceInterview({
             variant="outline"
             size="sm"
             onClick={() => {
-              if (wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({ type: "session.end_early" }));
+              if (internalWsRef.current?.readyState === WebSocket.OPEN) {
+                internalWsRef.current.send(JSON.stringify({ type: "session.end_early" }));
               }
             }}
           >
@@ -370,9 +414,29 @@ export function VoiceInterview({
         </div>
       )}
       {status === "error" && (
-        <div className="flex items-center gap-2 text-destructive">
-          <AlertCircle className="h-4 w-4" />
-          <span className="text-body-sm">{errorMessage}</span>
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span className="text-body-sm">{errorMessage}</span>
+          </div>
+          {isMicPermissionError && (
+            <div className="space-y-2 text-center">
+              <p className="text-caption text-ink-muted">
+                Check browser permissions, allow microphone access, or try a different browser.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setErrorMessage(null);
+                  setIsMicPermissionError(false);
+                  setStatus("connected");
+                }}
+              >
+                Retry microphone
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

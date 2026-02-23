@@ -40,7 +40,6 @@ export function InterviewClient({
   >({ status: "idle" });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSentRef = useRef(starterCode);
-  const isProgrammaticRef = useRef(false);
 
   const handleEditorChange = useCallback(
     (value: string) => {
@@ -51,7 +50,6 @@ export function InterviewClient({
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
         debounceRef.current = null;
-        if (isProgrammaticRef.current) return;
         if (lastSentRef.current === value) return;
         lastSentRef.current = value;
         wsCtx.sendCodeEdit(value, language);
@@ -59,16 +57,6 @@ export function InterviewClient({
     },
     [wsCtx, language]
   );
-
-  useEffect(() => {
-    isProgrammaticRef.current = true;
-    lastSentRef.current = starterCode;
-    setCode(starterCode);
-    const t = setTimeout(() => {
-      isProgrammaticRef.current = false;
-    }, 100);
-    return () => clearTimeout(t);
-  }, [starterCode]);
 
   useEffect(() => {
     return () => {

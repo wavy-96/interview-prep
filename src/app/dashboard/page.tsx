@@ -131,7 +131,11 @@ export default async function DashboardPage() {
                   return (
                     <li key={s.id}>
                       <Link
-                        href={`/sessions/${s.id}`}
+                        href={
+                          s.status === "completed"
+                            ? `/sessions/${s.id}/summary`
+                            : `/sessions/${s.id}`
+                        }
                         className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface px-4 py-3 transition-colors hover:bg-paper-hover sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div className="min-w-0 flex-1">

@@ -21,7 +21,6 @@ export function DesktopGate({ children }: DesktopGateProps) {
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  const isWide = width !== null && width >= MIN_WIDTH;
   const showGate = !dismissed && width !== null && width < MIN_WIDTH;
 
   if (showGate) {

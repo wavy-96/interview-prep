@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, Trash2 } from "lucide-react";
 
@@ -39,13 +39,6 @@ interface OutputPanelProps {
 
 export function OutputPanel({ state, onClear }: OutputPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
-
-  // Auto-expand so users always see results when a run completes.
-  useEffect(() => {
-    if (state.status === "done") {
-      setCollapsed(false);
-    }
-  }, [state.status]);
 
   if (state.status === "idle") {
     return (

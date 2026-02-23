@@ -2,6 +2,7 @@ import { redis } from "./redis.js";
 import { endSessionEarly } from "./timer.js";
 import { updateCode } from "./code-session-store.js";
 const MAX_PAYLOAD = 64 * 1024;
+const MAX_AUDIO_CHUNK_BYTES = 19200;
 const AUDIO_EVENTS = new Set([
     "input_audio_buffer.append",
     "input_audio_buffer.commit",
@@ -53,6 +54,19 @@ export const eventBus = {
             return;
         }
         if (AUDIO_EVENTS.has(msg.type)) {
+            if (msg.type === "input_audio_buffer.append" && typeof msg.audio === "string") {
+                try {
+                    const decoded = Buffer.from(msg.audio, "base64");
+                    if (decoded.length > MAX_AUDIO_CHUNK_BYTES) {
+                        ws.send(JSON.stringify({ type: "error", code: "invalid_audio", message: "Audio chunk too large" }));
+                        return;
+                    }
+                }
+                catch {
+                    ws.send(JSON.stringify({ type: "error", code: "invalid_audio", message: "Invalid audio format" }));
+                    return;
+                }
+            }
             const forward = options.forwardToOpenAI;
             if (forward) {
                 forward(data);

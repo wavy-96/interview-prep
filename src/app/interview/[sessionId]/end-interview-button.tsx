@@ -27,7 +27,7 @@ export function EndInterviewButton({ sessionId }: EndInterviewButtonProps) {
       }
 
       toast.success("Interview ended");
-      router.push(`/sessions/${sessionId}`);
+      router.push(`/sessions/${sessionId}/summary`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to end session");
     } finally {

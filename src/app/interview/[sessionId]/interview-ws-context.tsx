@@ -5,7 +5,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -39,7 +38,7 @@ interface InterviewWsProviderProps {
 export function InterviewWsProvider({ sessionId, children }: InterviewWsProviderProps) {
   const router = useRouter();
   const [tokenData, setTokenData] = useState<{ token: string; wsUrl: string } | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  const [ws, setWs] = useState<WebSocket | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,7 +69,6 @@ export function InterviewWsProvider({ sessionId, children }: InterviewWsProvider
   }, [sessionId]);
 
   const sendCodeEdit = useCallback((code: string, language: string) => {
-    const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     const size = new TextEncoder().encode(code).length;
     if (size > MAX_CODE_SIZE) return;
@@ -79,7 +77,7 @@ export function InterviewWsProvider({ sessionId, children }: InterviewWsProvider
     } catch (err) {
       console.error("[InterviewWs] sendCodeEdit error:", err);
     }
-  }, []);
+  }, [ws]);
 
   const value: InterviewWsContextValue = {
     sendCodeEdit,
@@ -101,12 +99,11 @@ export function InterviewWsProvider({ sessionId, children }: InterviewWsProvider
             </Link>
             <div className="flex flex-wrap items-center gap-4">
               <VoiceInterview
-                sessionId={sessionId}
                 wsToken={tokenData?.token ?? null}
                 wsUrl={tokenData?.wsUrl ?? ""}
-                wsRef={wsRef}
+                onSocketChange={setWs}
                 onError={(msg) => toast.error(msg)}
-                onSessionEnded={() => router.push(`/sessions/${sessionId}`)}
+                onSessionEnded={() => router.push(`/sessions/${sessionId}/summary`)}
               />
               <EndInterviewButton sessionId={sessionId} />
             </div>

@@ -30,8 +30,9 @@ async function init() {
   }
 }
 
-init();
-startWorkers();
+void init().finally(() => {
+  startWorkers();
+});
 
 const server = createServer((req, res) => {
   if (req.url === "/health" && req.method === "GET") {
@@ -70,7 +71,8 @@ wss.on("connection", async (ws, req) => {
     voiceProvider = await createVoiceProvider(session, {
       onMessage: (data) => {
         if (ws.readyState === 1) {
-          ws.send(data);
+          const payload = Buffer.isBuffer(data) ? data.toString("utf8") : data;
+          ws.send(payload);
         }
       },
       onError: (code, message) => {

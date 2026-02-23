@@ -20,8 +20,9 @@ async function init() {
         console.warn("Redis consumer groups init (optional):", err?.message);
     }
 }
-init();
-startWorkers();
+void init().finally(() => {
+    startWorkers();
+});
 const server = createServer((req, res) => {
     if (req.url === "/health" && req.method === "GET") {
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -51,7 +52,8 @@ wss.on("connection", async (ws, req) => {
         voiceProvider = await createVoiceProvider(session, {
             onMessage: (data) => {
                 if (ws.readyState === 1) {
-                    ws.send(data);
+                    const payload = Buffer.isBuffer(data) ? data.toString("utf8") : data;
+                    ws.send(payload);
                 }
             },
             onError: (code, message) => {

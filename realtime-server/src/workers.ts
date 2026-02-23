@@ -1,5 +1,6 @@
 import { redis } from "./redis.js";
 import { observeCodeAndInject } from "./observer-agent.js";
+import { evaluateSession } from "./evaluator-agent.js";
 
 const STREAM = "events";
 const DLQ_STREAM = "events.dlq";
@@ -38,7 +39,7 @@ function parsePayload(fields: string[]): Record<string, unknown> {
   return out;
 }
 
-/** Process events. Observer runs for code.edited in observer-workers; evaluator in later epic. */
+/** Process events. Observer runs for code.edited; evaluator runs for session.ended. */
 async function processEvent(
   type: string,
   sessionId: string,
@@ -52,6 +53,14 @@ async function processEvent(
     observeCodeAndInject(sessionId, code, language).catch((err) => {
       console.warn("[Observer] observeCodeAndInject error:", (err as Error)?.message);
     });
+    return { success: true };
+  }
+  if (type === "session.ended" && group === "evaluator-workers") {
+    const result = await evaluateSession(sessionId);
+    if (result) {
+      return { success: true };
+    }
+    return { success: false, error: "Evaluate API failed" };
   }
   return { success: true };
 }
